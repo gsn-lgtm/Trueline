@@ -39,7 +39,7 @@
     .legal { font-size:11px; color:var(--muted); line-height:1.4; margin-top:8px; }
     .fabs { position:absolute; right:12px; bottom:46vh; z-index:490; display:flex; flex-direction:column; gap:8px; }
     .fab { width:46px; height:46px; border-radius:14px; background:var(--panel); border:1px solid rgba(255,255,255,.1); color:var(--text); font-size:18px; }
-    .gps { position:absolute; left:12px; bottom:46vh; z-index:490; background:var(--panel); border-radius:12px; padding:8px 10px; font-size:12px; border:1px solid rgba(255,255,255,.08); max-width:58vw; }
+    .gps { position:absolute; left:12px; bottom:46vh; z-index:490; background:var(--panel); border-radius:12px; padding:8px 10px; font-size:12px; border:1px solid rgba(255,255,255,.08); max-width:58vw; display:none; }
     h2 { margin:0 0 4px; font-size:17px; }
     a { color:var(--accent); }
     .empty { color:var(--muted); font-size:13px; }
@@ -53,7 +53,7 @@
     <input class="search" id="q" type="search" placeholder="Address, owner, PIN" autocomplete="off" autocorrect="off" enterkeyhint="search" />
   </div>
   <div class="suggest" id="suggest"></div>
-  <div class="gps" id="gps">GPS: waiting…</div>
+  <div class="gps" id="gps"></div>
   <div class="fabs">
     <button class="fab" id="btnLocate" title="My location">◎</button>
     <button class="fab" id="btnWalk" title="Record walk">⌖</button>
@@ -65,5 +65,6 @@
   <script src="app.js"></script>
   <script src="search.js"></script>
   <script src="details.js"></script>
+  <script src="gps-fix.js"></script>
 </body>
 </html>
