@@ -1,0 +1,9 @@
+{
+  "name": "TrueLine",
+  "short_name": "TrueLine",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0b1220",
+  "theme_color": "#0b1220",
+  "description": "Field parcel viewer that shows tax-map lines with honesty about accuracy."
+}

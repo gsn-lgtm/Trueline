@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="TrueLine" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#0b1220" />
+  <link rel="manifest" href="manifest.json" />
+  <title>TrueLine</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    :root { --bg:#0b1220; --panel:rgba(12,20,36,.94); --line:#7CFFB2; --warn:#FFC857; --danger:#FF6B6B; --text:#E8EEF7; --muted:#93A0B5; --accent:#4DA3FF; }
+    * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+    html,body { margin:0; height:100%; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif; }
+    #map { position:absolute; inset:0; }
+    .topbar { position:absolute; top:0; left:0; right:0; z-index:500; padding:calc(env(safe-area-inset-top) + 8px) 12px 8px; display:flex; gap:8px; align-items:center; }
+    .brand { font-weight:800; letter-spacing:.06em; font-size:13px; background:var(--panel); padding:9px 10px; border-radius:12px; border:1px solid rgba(255,255,255,.08); white-space:nowrap; }
+    .brand span { color:var(--line); }
+    select, input.search { height:40px; border:0; border-radius:12px; padding:0 10px; background:var(--panel); color:var(--text); border:1px solid rgba(255,255,255,.08); font-size:16px; }
+    input.search { flex:1; min-width:0; }
+    select { max-width:42vw; }
+    .sheet { position:absolute; left:0; right:0; bottom:0; z-index:500; background:var(--panel); backdrop-filter:blur(18px); border-radius:20px 20px 0 0; padding:10px 14px calc(env(safe-area-inset-bottom)+12px); max-height:52vh; overflow:auto; border-top:1px solid rgba(255,255,255,.1); }
+    .handle { width:36px; height:4px; background:#3a4660; border-radius:4px; margin:2px auto 10px; }
+    .row { display:flex; justify-content:space-between; gap:10px; margin:6px 0; font-size:14px; }
+    .label { color:var(--muted); flex-shrink:0; }
+    .value { text-align:right; font-weight:600; word-break:break-word; }
+    .badge { display:inline-block; font-size:11px; font-weight:700; letter-spacing:.04em; padding:3px 8px; border-radius:999px; background:#2a2208; color:var(--warn); }
+    .badge.ok { background:#082418; color:var(--line); }
+    .badge.bad { background:#2a1010; color:var(--danger); }
+    .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+    button { background:#1b2740; color:var(--text); border:1px solid rgba(255,255,255,.1); border-radius:12px; padding:10px 12px; font-size:13px; font-weight:600; }
+    button.primary { background:#143528; border-color:#1f5a3c; color:var(--line); }
+    .legal { font-size:11px; color:var(--muted); line-height:1.4; margin-top:8px; }
+    .fabs { position:absolute; right:12px; bottom:46vh; z-index:490; display:flex; flex-direction:column; gap:8px; }
+    .fab { width:46px; height:46px; border-radius:14px; background:var(--panel); border:1px solid rgba(255,255,255,.1); color:var(--text); font-size:18px; }
+    .gps { position:absolute; left:12px; bottom:46vh; z-index:490; background:var(--panel); border-radius:12px; padding:8px 10px; font-size:12px; border:1px solid rgba(255,255,255,.08); max-width:58vw; }
+    h2 { margin:0 0 4px; font-size:17px; }
+    a { color:var(--accent); }
+    .empty { color:var(--muted); font-size:13px; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div class="topbar">
+    <div class="brand">TRUE<span>LINE</span></div>
+    <select id="county"></select>
+    <input class="search" id="q" type="search" placeholder="Owner, PIN, street" enterkeyhint="search" />
+  </div>
+  <div class="gps" id="gps">GPS: waiting…</div>
+  <div class="fabs">
+    <button class="fab" id="btnLocate" title="My location">◎</button>
+    <button class="fab" id="btnWalk" title="Record walk">⌖</button>
+    <button class="fab" id="btnMeasure" title="Measure">⤢</button>
+    <button class="fab" id="btnLayer" title="Basemap">▣</button>
+  </div>
+  <div class="sheet"><div class="handle"></div><div id="content"></div></div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
