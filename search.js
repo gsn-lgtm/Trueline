@@ -91,21 +91,13 @@ async function liveSuggest(q) {
   suggestEl.style.display = "block";
   suggestEl.innerHTML = `<button type="button">Searching…</button>`;
 
-  const fast = addressHits(q, signal).then(addresses => {
-    if (token !== suggestToken) return;
-    if (addresses.length) showSuggest(addresses);
-  }).catch(() => {});
-
-  const slow = parcelHits(q, current, signal).then(parcels => {
-    if (token !== suggestToken) return parcels;
-    return parcels;
+  const addrP = addressHits(q, signal).then(addresses => {
+    if (token === suggestToken && addresses.length) showSuggest(addresses);
+    return addresses;
   }).catch(() => []);
 
-  const [addresses, parcels] = await Promise.all([
-    addressHits(q, signal).catch(() => []),
-    slow
-  ]);
-  await fast;
+  const parP = parcelHits(q, current, signal).catch(() => []);
+  const [addresses, parcels] = await Promise.all([addrP, parP]);
   if (token !== suggestToken) return;
   const items = [...parcels.slice(0, 5), ...addresses.slice(0, 5)];
   if (!items.length) {
