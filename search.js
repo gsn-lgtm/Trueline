@@ -1,8 +1,9 @@
-/* Live search overlay. Runs after app.js and replaces the Enter-only search. */
+/* Live search. Photon first; county parcels in the background. */
 const suggestEl = document.getElementById("suggest");
 const qEl = document.getElementById("q");
 let suggestTimer = null;
 let suggestToken = 0;
+let suggestAbort = null;
 
 function hideSuggest() {
   suggestEl.style.display = "none";
@@ -33,61 +34,49 @@ async function pickSuggestion(it) {
   }
   if (it.lat != null && it.lon != null) {
     map.setView([it.lat, it.lon], 18);
-    const detected = await detectCounty(it.lat, it.lon);
-    queryPoint({ lat: it.lat, lng: it.lon }, detected.query ? detected : current);
+    queryPoint({ lat: it.lat, lng: it.lon }, current);
   }
 }
 
-async function parcelHits(q, county) {
-  if (!county.query || q.length < 2) return [];
+function timedFetch(url, ms, signal) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  if (signal) signal.addEventListener("abort", () => ctrl.abort());
+  return fetch(url, { signal: ctrl.signal }).finally(() => clearTimeout(t));
+}
+
+async function parcelHits(q, county, signal) {
+  if (!county.query || q.length < 3) return [];
   const escQ = q.replace(/'/g, "''");
-  const fields = [...(county.ownerFields||[]), ...(county.pinFields||[]), ...(county.streetFields||[])];
-  const clauses = fields.map(f => `UPPER(${f}) LIKE UPPER('%${escQ}%')`);
-  if (!clauses.length) return [];
-  const url = `${county.query}/query?f=geojson&where=${encodeURIComponent(clauses.join(" OR "))}&outFields=*&returnGeometry=true&outSR=4326&resultRecordCount=8`;
-  const data = await fetch(url).then(r => r.json()).catch(() => null);
+  const fields = [...(county.streetFields || []), ...(county.pinFields || []), ...(county.ownerFields || [])].slice(0, 4);
+  if (!fields.length) return [];
+  const clauses = fields.map(f => `${f} LIKE '%${escQ}%'`);
+  const outFields = [...new Set([...fields, "OWNERNAME", "PARCELID"])].join(",");
+  const url = `${county.query}/query?f=geojson&where=${encodeURIComponent(clauses.join(" OR "))}&outFields=${encodeURIComponent(outFields)}&returnGeometry=true&outSR=4326&resultRecordCount=5`;
+  const data = await timedFetch(url, 3500, signal).then(r => r.json()).catch(() => null);
   if (!data || !data.features) return [];
   return data.features.map(f => {
     const p = f.properties || {};
-    const owner = pick(p, county.ownerFields || ["OWNERNAME","Owner"]) || "Parcel";
-    const pin = pick(p, county.pinFields || ["PARCELID","PIN"]);
-    const site = pick(p, county.streetFields || ["Street_Name","PROP_ADR","ADDRESS_1"]);
-    return { kind:"parcel", label: owner, sub: [pin, site, county.name].filter(Boolean).join(" · "), feature: f, query: q };
+    const owner = pick(p, county.ownerFields || ["OWNERNAME", "Owner"]) || "Parcel";
+    const pin = pick(p, county.pinFields || ["PARCELID", "PIN"]);
+    const site = pick(p, county.streetFields || ["Street_Name", "PROP_ADR"]);
+    return { kind: "parcel", label: owner, sub: [pin, site, county.name].filter(Boolean).join(" · "), feature: f, query: q };
   });
 }
 
-async function addressHits(q) {
-  const center = current.center || [33.52, -86.80];
-  const photon = `https://photon.komoot.io/api/?q=${encodeURIComponent(q + " Alabama")}&lat=${center[0]}&lon=${center[1]}&limit=6&lang=en`;
-  const census = `https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?address=${encodeURIComponent(q + ", AL")}&benchmark=Public_AR_Current&format=json`;
-  const [pRes, cRes] = await Promise.allSettled([
-    fetch(photon).then(r => r.json()),
-    fetch(census).then(r => r.json())
-  ]);
+async function addressHits(q, signal) {
+  const center = current.center || [33.5207, -86.8025];
+  const photon = `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&lat=${center[0]}&lon=${center[1]}&limit=5&lang=en`;
+  const data = await timedFetch(photon, 2500, signal).then(r => r.json()).catch(() => null);
   const out = [];
-  if (cRes.status === "fulfilled") {
-    for (const m of (cRes.value?.result?.addressMatches || []).slice(0, 4)) {
-      out.push({
-        kind:"address",
-        label: m.matchedAddress || q,
-        sub: "Census address match",
-        lat: +m.coordinates.y,
-        lon: +m.coordinates.x,
-        query: m.matchedAddress
-      });
-    }
-  }
-  if (pRes.status === "fulfilled") {
-    for (const f of (pRes.value?.features || [])) {
-      const [lon, lat] = f.geometry.coordinates;
-      const p = f.properties || {};
-      if (p.countrycode && p.countrycode !== "US") continue;
-      if (p.state && !/^al/i.test(p.state) && p.state !== "Alabama") continue;
-      const line = [p.housenumber, p.street || p.name, p.city || p.county, p.state].filter(Boolean).join(" ");
-      if (!line) continue;
-      if (out.some(x => x.label.toLowerCase() === line.toLowerCase())) continue;
-      out.push({ kind:"address", label: line, sub: p.city ? `${p.city}, AL` : "Address", lat, lon, query: line });
-    }
+  for (const f of (data && data.features) || []) {
+    const [lon, lat] = f.geometry.coordinates;
+    const p = f.properties || {};
+    if (p.countrycode && p.countrycode !== "US") continue;
+    if (p.state && !/^al/i.test(String(p.state)) && p.state !== "Alabama") continue;
+    const line = [p.housenumber, p.street || p.name, p.city || p.county, "AL"].filter(Boolean).join(" ");
+    if (!line) continue;
+    out.push({ kind: "address", label: line, sub: p.city ? `${p.city}, AL` : "Address", lat, lon, query: line });
   }
   return out;
 }
@@ -96,14 +85,29 @@ async function liveSuggest(q) {
   q = q.trim();
   if (q.length < 2) { hideSuggest(); return; }
   const token = ++suggestToken;
+  if (suggestAbort) suggestAbort.abort();
+  suggestAbort = new AbortController();
+  const signal = suggestAbort.signal;
   suggestEl.style.display = "block";
-  suggestEl.innerHTML = `<button type="button">Looking up “${esc(q)}”…</button>`;
-  const [parcels, addresses] = await Promise.all([
-    parcelHits(q, current).catch(() => []),
-    addressHits(q).catch(() => [])
+  suggestEl.innerHTML = `<button type="button">Searching…</button>`;
+
+  const fast = addressHits(q, signal).then(addresses => {
+    if (token !== suggestToken) return;
+    if (addresses.length) showSuggest(addresses);
+  }).catch(() => {});
+
+  const slow = parcelHits(q, current, signal).then(parcels => {
+    if (token !== suggestToken) return parcels;
+    return parcels;
+  }).catch(() => []);
+
+  const [addresses, parcels] = await Promise.all([
+    addressHits(q, signal).catch(() => []),
+    slow
   ]);
+  await fast;
   if (token !== suggestToken) return;
-  const items = [...parcels.slice(0, 6), ...addresses.slice(0, 6)];
+  const items = [...parcels.slice(0, 5), ...addresses.slice(0, 5)];
   if (!items.length) {
     suggestEl.innerHTML = `<button type="button">No matches yet — keep typing</button>`;
     return;
@@ -127,12 +131,12 @@ async function search(q) {
   hideSuggest();
   document.getElementById("content").innerHTML = `
     <div class="badge bad">NO MATCH</div>
-    <p class="empty">Nothing in ${esc(current.name)} or the public address index for “${esc(q)}”. Try a PIN, owner last name, or city + street.</p>`;
+    <p class="empty">Nothing quick for “${esc(q)}”. Try street + city, owner last name, or PIN.</p>`;
 }
 
 qEl.addEventListener("input", () => {
   clearTimeout(suggestTimer);
-  suggestTimer = setTimeout(() => liveSuggest(qEl.value), 220);
+  suggestTimer = setTimeout(() => liveSuggest(qEl.value), 120);
 });
 qEl.addEventListener("keydown", e => {
   if (e.key === "Enter") { e.preventDefault(); clearTimeout(suggestTimer); search(qEl.value); }
